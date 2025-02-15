@@ -1,0 +1,61 @@
+import json
+import requests
+from collections import defaultdict
+
+# Monad RPC URL
+MONAD_RPC_URL = "https://rpc.monad.network"
+
+# Helper function to make RPC requests
+def make_rpc_request(method, params=[]):
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": method,
+        "params": params
+    }
+    response = requests.post(MONAD_RPC_URL, json=payload)
+    return response.json()
+
+# Get the latest block number
+def get_latest_block():
+    result = make_rpc_request("eth_blockNumber")
+    return int(result["result"], 16)
+
+# Get block details
+def get_block_details(block_number):
+    result = make_rpc_request("eth_getBlockByNumber", [hex(block_number), True])
+    return result.get("result", {})
+
+# Get transaction details
+def get_transaction(tx_hash):
+    return make_rpc_request("eth_getTransactionByHash", [tx_hash]).get("result", {})
+
+# Main function
+def analyze_latest_blocks(count=10):
+    latest_block = get_latest_block()
+    stats = defaultdict(lambda: {"tx_count": 0, "total_gas": 0, "avg_gas": 0})
+    
+    print(f"Analyzing last {count} blocks...")
+    
+    for i in range(count):
+        block_number = latest_block - i
+        block = get_block_details(block_number)
+        
+        if not block:
+            print(f"Skipping block {block_number}, no data found.")
+            continue
+        
+        tx_count = len(block.get("transactions", []))
+        total_gas = sum(int(tx["gas"], 16) for tx in block["transactions"] if "gas" in tx)
+        avg_gas = total_gas / tx_count if tx_count > 0 else 0
+        
+        stats[block_number]["tx_count"] = tx_count
+        stats[block_number]["total_gas"] = total_gas
+        stats[block_number]["avg_gas"] = avg_gas
+        
+        print(f"Block {block_number}: {tx_count} TXs, Total Gas: {total_gas}, Avg Gas: {avg_gas:.2f}")
+    
+    return stats
+
+if __name__ == "__main__":
+    stats = analyze_latest_blocks()
